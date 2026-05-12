@@ -55,20 +55,24 @@ def split_data(X, y, groups):
     return X_train, X_test, y_train, y_test
 
 def train_model(X_train, y_train):
-    print("\n[4] Training XGBoost model")
-    scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()
-    print(f"    Class imbalance ratio: {scale_pos_weight:.1f}")
+    print("\n[4] Applying SMOTE to fix class imbalance...")
+    from imblearn.over_sampling import SMOTE
+    smote = SMOTE(random_state=42, k_neighbors=3)
+    X_res, y_res = smote.fit_resample(X_train, y_train)
+    print(f"    Before SMOTE: {y_train.value_counts().to_dict()}")
+    print(f"    After  SMOTE: {pd.Series(y_res).value_counts().to_dict()}")
+
+    print("\n[5] Training XGBoost model with calibration")
     base_model = xgb.XGBClassifier(
-        n_estimators=200,
-        max_depth=4,
+        n_estimators=300,
+        max_depth=5,
         learning_rate=0.05,
-        scale_pos_weight=scale_pos_weight,
         eval_metric="logloss",
         random_state=42
     )
     calibrated_model = CalibratedClassifierCV(base_model, cv=3, method="isotonic")
-    calibrated_model.fit(X_train, y_train)
-    print("    Model trained with probability calibration")
+    calibrated_model.fit(X_res, y_res)
+    print("    Model trained with SMOTE + probability calibration")
     return calibrated_model
 
 def evaluate_model(model, X_test, y_test):
